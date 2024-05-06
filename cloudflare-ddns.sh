@@ -11,7 +11,13 @@ zone_id="paste-zone-id-here"
 record_name="vpn.yourdomain.com"
 
 # Don't touch these
-ip=$(curl -s http://ipv4.icanhazip.com)
+# Default http://api.ipify.org  
+#curl ifconfig.me
+#curl ipv4.ip.sb
+#curl http://test.ipw.cn
+#https://icanhazip.com/
+#http://ident.me/
+ip=$(curl -s http://api.ipify.org )
 ip_file="ip.txt"
 id_file="cloudflare.ids"
 log_file="cloudflare.log"
