@@ -19,7 +19,6 @@ record_name="vpn.yourdomain.com"
 #http://ident.me/
 ip=$(curl -s http://api.ipify.org )
 ip_file="ip.txt"
-id_file="cloudflare.ids"
 log_file="cloudflare.log"
 
 # Keep files in the same folder when run from cron
@@ -42,27 +41,26 @@ if [ -f $ip_file ]; then
     fi
 fi
 
-if [ -f $id_file ] && [ $(wc -l $id_file | cut -d " " -f 1) == 2 ]; then
-    zone_identifier=$zone_id
-    record_identifier=$(head -1 $id_file)
-else
-    zone_identifier=$zone_id
-    result=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$zone_identifier/dns_records?name=$record_name" -H "Authorization: Bearer $auth_token" -H "Content-Type: application/json")
-    stage=$(grep -Po '"id": *\K"[^"]*"' <<< $result)
-    record_identifier=$(sed -e 's/^"//' -e 's/"$//' <<< "$stage")
-    echo "$record_identifier" >> $id_file
-fi
+#get the domain and authentic
+record_identifier=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$zone_identifier/dns_records?type=${record_type}&name=$record_name" \
+        -H "Authorization: Bearer $auth_token" \
+        -H "Content-Type: application/json"  | grep -Po '(?<="id":")[^"]*')
+# overwrite the dns
+update=$(curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$zone_identifier/dns_records/$record_identifier" \
+    -H "Authorization: Bearer $auth_token" \
+    -H "Content-Type: application/json" \
+    --data "{\"type\":\"$record_type\",\"name\":\"$record_name\",\"content\":\"$ip\",\"ttl\":600,\"proxied\":false}")
 
-update=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$zone_identifier/dns_records/$record_identifier" -H "Authorization: Bearer $auth_token" -H "Content-Type: application/json" --data "{\"id\":\"$zone_identifier\",\"type\":\"A\",\"name\":\"$record_name\",\"content\":\"$ip\",\"ttl\":600}")
 
-if [[ $update == *"\"success\":false"* ]]; then
-    message="API UPDATE FAILED. DUMPING RESULTS:\n$update"
-    log "$message"
-    echo -e "$message"
-    exit 1 
-else
+#gave the feedback about the update statues
+if [[ $update == *"\"success\":true"* ]]; then
     message="IP changed to: $ip"
     echo "$ip" > $ip_file
     log "$message"
     echo "$message"
+else
+    message="API UPDATE FAILED. DUMPING RESULTS:\n$update"
+    log "$message"
+    echo -e "$message"
+    exit 1
 fi
